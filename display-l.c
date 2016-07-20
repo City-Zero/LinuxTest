@@ -59,6 +59,7 @@ int main(int argc,char *argv[])
     } else if(S_ISDIR(buf.st_mode)) {
         printf("d");
     }
+	//打印文件权限
     int i;
     i=(buf.st_mode % 512)/64;
     rwx(i);
@@ -73,7 +74,8 @@ int main(int argc,char *argv[])
     struct group *grp;//获取所属组用户名
     psd = getpwuid(buf.st_uid);
     grp = getgrgid(buf.st_gid);
-    printf(" %-4s %-4s",psd->pw_name,grp->gr_name);
+    printf(" %-4s %-4s",psd->pw_name,grp->gr_name);//所属用户及用户组
+	printf(" %6ld",buf.st_size);
     char *shijian;
     shijian = (char*)malloc(sizeof(ctime(&buf.st_mtime)));
     strcpy(shijian,ctime(&buf.st_mtime));
