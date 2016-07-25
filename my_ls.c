@@ -83,7 +83,7 @@ int display_l(char *path,char *change_dir)//详细显示文件
         printf("\033[0;34;1m %s\033[0m:",path);
     } else printf(" %s",path);
     puts("");
-		chdir(dangqian);
+	chdir(dangqian);
     return 0;
 }
 
