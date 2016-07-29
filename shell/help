@@ -1,0 +1,19 @@
+welcome to us k-sh!
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+function:
+    1.history:view input history
+    2.del history:delete input history
+    3.help:open help file
+    4.cd <path>:change work path
+        *cd ~:go to your home
+    5.tab:completion input
+    6.up & down:change last or next input
+    7.you can use > < | or &
+        >:Output redirection
+        <:Input redirection
+        |:Pipe symbol
+        &:Background
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+if you have any question,you can contact me by e-mail!
+e-mail:1041984720@qq.com
