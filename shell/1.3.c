@@ -278,6 +278,10 @@ void deal_input(char a[][22])
     for(j=0;j<i;j++) {
         arg[j]=(char*)a[j];
     }
+    if(strcmp(arg[0],"ls") == 0) {
+        arg[i] = "--color=auto";
+        i++;
+    }
     arg[i] = NULL;
     if("mode == 1||mode ==2") {
         for(j=0;j<i;j++) {
