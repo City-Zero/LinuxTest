@@ -9,12 +9,12 @@
 #include<sys/socket.h>
 #include<sys/types.h>
 #include<unistd.h>
-#include<stdio.h>
+#include<stdlib.h>
 #include<string.h>
 #include<netinet/in.h>
 #include<arpa/inet.h>
 #include<errno.h>
-#include"recv.h"
+#include"my_recv.h"
 
 #define SERV_PORT           4507    //服务器端口
 #define LISTENQ             12      //连接1请求队列的最大长度
@@ -35,7 +35,7 @@ struct userinfo users[] = {
     {"lyt","lyt"},
     {"zxw","zxw"},
     {"",""} //以只含一个空格的字符串作为数组的结束标志
-}；
+};
 
 //查找用户名是否存在，存在返回该用户名的下标，不存在返回-1，出错返回-2
 int find_name(const char *name)
@@ -130,14 +130,14 @@ int main()
                     default:
                         send_data(conn_fd,"y\n");
                         flag_recv = PASSWORD;
-                        breadk;
+                        break;
                     }
                 } else if(flag_recv == PASSWORD) {
-                    if(strcmp(user[name_num].password,recv_buf) ==  0) {
+                    if(strcmp(users[name_num].password,recv_buf) ==  0) {
                         send_data(conn_fd,"y\n");
                         send_data(conn_fd,"Welcome login my tcp server\n");
                         printf("%s login\n",users[name_num].username);
-                        breadk;
+                        break;
                     } else {
                         send_data(conn_fd,"n\n");
                     }
