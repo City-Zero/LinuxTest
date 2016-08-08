@@ -69,7 +69,7 @@ void my_err(const char *err_string,int line)
 
 void chat(int conn_fd)
 {
-    char mess[255];
+    MES mes;
     puts(YELLOW"-----------------------------------------------");
     puts("-                                             -");
     puts("-   input your message,press enter to send    -");
@@ -78,9 +78,24 @@ void chat(int conn_fd)
     puts("-                                             -");
     puts("-----------------------------------------------"WHITE);
     while(1) {
-        memset(mess,0,sizeof(mess);
-        fgets(mess,sizeof(mess),stdin);
+        memset(&mes,0,sizeof(MES));
+        printf(PURPLE"->%s :"WHITE,to_who);
+        fgets(mes.detail,sizeof(mes.detail),stdin);
+        mes.detail[strlen(mes.detail)] = '\0';
+        if(strcmp(mes.detail,"-logout-") == 0) {
+            exit(0);
+        } else if(strcpy(mes.detail,"-host-") == 0) {
+            SigOK(conn_fd);
+            exit(0);
+        }
         setbuf(stdin,NULL);
+        mes.mode = Chat_;
+        strcpy(mes.from,i_am);
+        strcpy(mes.to,to_who);
+        if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+            my_err("send",__LINE__);
+            exit(0);
+        }
     }
 }
 
@@ -202,6 +217,41 @@ void SignUp(int conn_fd)
             puts(mes.detail);
             printf("%s",WHITE);
         }
+    }
+
+}
+
+void SignIn(int conn_fd)
+{
+    system("printf \"\ec\"");
+    puts(PURPLE"\t\tsign in\t\t"WHITE);
+    MES mes;
+    char name[20];
+    printf("please input name:");
+    fgets(name,20,stdin);
+    name[strlen(name)] = '\0';
+    char pass[20];
+    memcpy(pass,getpass("please input password:"),20);
+    memset(&mes,0,sizeof(mes));
+    strcpy(mes.detail,name);
+    strcat(mes.detail,";");
+    strcat(mes.detail,pass);
+    mes.mode = Sign_In;
+    if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("send",__LINE__);
+        exit(0);
+    }
+    memset(&mes,0,sizeof(MES));
+    if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("recv",__LINE__);
+        exit(0);
+    }
+    if(mes.mode == Sign_In && mes.resault == 1) {
+        strcpy(i_am,name);
+        puts(mes.detail);
+    } else {
+        puts(mes.detail);
+        SignIn(conn_fd);
     }
 
 }
