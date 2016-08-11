@@ -17,6 +17,7 @@
 #include<arpa/inet.h>
 #include<mysql/mysql.h>
 #include<string.h>
+#include<pthread.h>
 
 #define SERV_PORT   4040
 #define LISTENQ     5
@@ -47,9 +48,35 @@ typedef struct User_list
 
 }U_L;
 
-int match(int mode,char *ch)
+U_L *head;
+
+void add_list(char *name,int fd)
 {
-    char *sql;
+    U_L *temp;
+    temp = (U_L*)malloc(sizeof(U_L));
+    strcpy(temp->name,name);
+    temp->num=fd;
+    temp->next=head->next;
+    head->next=temp;
+}
+void creat_list(void)
+{
+    head = (U_L*)malloc(sizeof(U_L));
+    head -> next = NULL;
+}
+
+void my_err(const char *err_string,int line)
+{
+    fprintf(stderr,"line:%d",line);
+    perror(err_string);
+    exit(1);
+}
+
+int match(int mode,char *ch,int conn_fd)
+{
+    MES mes;
+    memset(&mes,0,sizeof(MES));
+    char sql[50];
     int res;//执行sql语句后的返回标志
     MYSQL_RES *res_ptr;//指向查询结果的指针
     MYSQL_FIELD *field;//字段结构指针
@@ -64,7 +91,12 @@ int match(int mode,char *ch)
     }
     name[i] = '\0';
     i++;
-    strcpy(pass,name[i]);
+    for(j=0;ch[i]!='\0';j++,i++) {
+        pass[j]=ch[i];
+    }
+    pass[j]='\0';
+    puts(name);
+    puts(pass);
     //初始化连接句柄
     conn = mysql_init(NULL);
 
@@ -83,7 +115,9 @@ int match(int mode,char *ch)
     mysql_query(conn,"set names gbk");//防止乱码。设置和数据库的编码一致就不会乱码
 
     if(mode == 2) {
-        sql="SELECT name FROM info;";//查询注册是否重名
+        sprintf(sql,"SELECT name FROM info WHERE name='%s';",name);
+        puts(sql);
+        //查询注册是否重名
         res = mysql_query(conn,sql);//正确返回0
         if(res) {
             perror("my_query");
@@ -92,27 +126,39 @@ int match(int mode,char *ch)
         } else{
             //把查询结果给res_ptr
             res_ptr = mysql_store_result(conn);
-            //如果结果不为空,则输出
+            //如果结果为空,未重名,添加账号
             if(res_ptr) {
-                column = mysql_num_fields(res_ptr);
-                row = mysql_num_rows(res_ptr);
-                for(i = 1;i < row+1;i++){
-                    result_row = mysql_fetch_row(res_ptr);
-                    if(strcmp(result_row[0],name) == 0) {
-                        pan = 1;
-                        break;
-                    }
-                }
+                int ro;
+                ro = mysql_num_rows(res_ptr);
+                if(ro == 0){
+                    pan = 1;
+                } 
             }
         }
 		if(pan) {
-		char s[40];
-		strcpy(s,"INSERT INTO info VALUES('");
-		strcat(s,name)
-		mysql_query(conn,"INSERT INTO info VALUES('n','n');");
-		}
+            sprintf(sql,"INSERT INTO info(name,pass) VALUES('%s','%s');",name,pass);
+            puts(sql);
+            res = mysql_query(conn,sql);//正确返回0
+            if(res) {
+                perror("my_query");
+                mysql_close(conn);
+                exit(0);
+            }
+            mes.resault = 1;
+            if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+                my_err("send",__LINE__);
+                exit(0);
+            }
+        }else {
+            mes.resault = 0;
+            if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+                my_err("send",__LINE__);
+                exit(0);
+            } 
+        }
     } else if(mode == 1) {
-        sql="SELECT * FROM info;";//查询登陆是否正确
+        sprintf(sql,"SELECT * FROM info WHERE name='%s' AND pass='%s';",name,pass);
+        //查询登陆是否正确
     	res = mysql_query(conn,sql);//正确返回0
     	if(res) {
         	perror("my_query");
@@ -121,32 +167,37 @@ int match(int mode,char *ch)
     	} else{
         	//把查询结果给res_ptr
         	res_ptr = mysql_store_result(conn);
-        	//如果结果不为空,则输出
-        	if(res_ptr) {
-            	column = mysql_num_fields(res_ptr);
-	            row = mysql_num_rows(res_ptr);
-    	        //输出结果的字段名
-    	        for(i = 0;field = mysql_fetch_field(res_ptr);i++) {
-    	        }
-    	        //按行输出结果
-    	        for(i = 1;i < row+1;i++){
-    	            result_row = mysql_fetch_row(res_ptr);
-    	            if(strcmp(result_row[0],name) == 0 && strcmp(result_row[1],pass) == 0) {
-						pan = 1;
-						break;
-					}
-    	        }
-    	    }
-    	}
+        	//如果结果不为空,则登陆成功
+            if(res_ptr) {
+                int ro;
+                ro = mysql_num_rows(res_ptr);
+                if(ro != 0){
+                    pan = 1;
+                } 
+            }
+        }
+		if(pan) {
+            mes.resault = 1;
+            if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+                my_err("send",__LINE__);
+                exit(0);
+            }
+        }else {
+            mes.resault = 0;
+            if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+                my_err("send",__LINE__);
+                exit(0);
+            } 
+        }
     }
     //退出前关闭连接
     mysql_close(conn);
-
-    return 0;
+    return pan;
 }
 
 void sign_in_up(int conn_fd)
 {
+while(1) {
     MES mes;
     memset(&mes,0,sizeof(MES));
     if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
@@ -154,7 +205,20 @@ void sign_in_up(int conn_fd)
         exit(0);
     }
     int res;
-    res = match(mes.mode,mes.detail);
+    printf("%d,%s\n",mes.mode,mes.detail);
+    res = match(mes.mode,mes.detail,conn_fd);
+    char name[20];
+    int i;
+    for(i =0;mes.detail[i]!=';';i++) {
+        name[i]=mes.detail[i];
+    }
+    name[i] = '\0';
+    puts("name");
+    if(res) {
+        //跳转到登陆或聊天页面
+        add_list(name,conn_fd);
+    }
+}
 }
 int main()
 {
@@ -198,9 +262,9 @@ int main()
         if(conn_fd < 0) {
             my_err("accept",__LINE__);
         }
-        printf("一个新的连接,来自 %s\n",inet_ntoa(cli_addr.sin_addr));
+        printf("一个新的连接,来自 %s,conn_fd = %d\n",inet_ntoa(cli_addr.sin_addr),conn_fd);
 
         pthread_t thid;
-        pthread_create(&thid,NULL,(void*)sign_in_up(),&conn_fd)
+        pthread_create(&thid,NULL,(void*)sign_in_up,(void*)conn_fd);
     }
 }

@@ -59,12 +59,12 @@ void chat(int conn_fd);
 
 char to_who[20];
 char i_am[20];
+
 void my_err(const char *err_string,int line)
 {
     fprintf(stderr,"line:%d",line);
     perror(err_string);
     exit(1);
-
 }
 
 void chat(int conn_fd)
@@ -164,28 +164,64 @@ int SigOK(int conn_fd)
 }
 int Sel(void)
 {
-    printf("please select:");
+    printf("请选择:");
     int a;
     scanf("%d",&a);
     setbuf(stdin,NULL);
     return a;
 }
 
+void SignIn(int conn_fd)
+{
+    system("printf \"\ec\"");
+    puts(PURPLE"\t\t登陆\t\t"WHITE);
+    MES mes;
+    char name[20];
+    printf("请输入用户名:");
+    fgets(name,20,stdin);
+    setbuf(stdin,NULL);
+    char pass[20];
+    memcpy(pass,getpass("请输入密码:"),20);
+    memset(&mes,0,sizeof(MES));
+    mes.mode=Sign_In;
+    strcpy(mes.detail,name);
+    mes.detail[strlen(mes.detail)-1] = ';';
+    mes.detail[strlen(mes.detail)] = '\0';
+    strcat(mes.detail,pass);
+    if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("send",__LINE__);
+        exit(0);
+    }
+    memset(&mes,0,sizeof(MES));
+    if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("recv",__LINE__);
+        exit(0);
+    }
+    if(mes.resault) {
+        puts("登陆成功,正在跳转...");
+        sleep(1);
+        strcpy(i_am,name);
+        SigOK(conn_fd);
+    } else{
+        puts("登陆失败");
+        sleep(1);
+    }
+}
 void SignUp(int conn_fd)
 {
     system("printf \"\ec\"");
-    puts(PURPLE"\t\tsign up\t\t"WHITE);
+    puts(PURPLE"\t\t注册\t\t"WHITE);
     MES mes;
     char name[20];
-    printf("please input name:");
+    printf("请输入用户名:");
     fgets(name,20,stdin);
     setbuf(stdin,NULL);
     while(1) {
         char pass[20];
         char passp[20];
-        memcpy(pass,getpass("please input password:"),20);
+        memcpy(pass,getpass("请输入密码:"),20);
         setbuf(stdin,NULL);
-        memcpy(passp,getpass("input again:"),20);
+        memcpy(passp,getpass("请再次输入:"),20);
         setbuf(stdin,NULL);
         if(strcmp(pass,passp) == 0) {
             memset(&mes,0,sizeof(mes));
@@ -195,7 +231,7 @@ void SignUp(int conn_fd)
             strcat(mes.detail,pass);
             break;
         } else {
-            puts("Mismatch!");
+            puts("两次密码不匹配!");
         }
     }
     mes.mode = Sign_Up;
@@ -206,32 +242,32 @@ void SignUp(int conn_fd)
     memset(&mes,0,sizeof(mes));
     if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
         my_err("recv",__LINE__);
-    } else {
-        if(mes.resault) {//注册成功
-            strcpy(i_am,name);
-            SigOK(conn_fd);
-            sleep(1);
-        } else {
-            puts("12345");
-            printf("%s",RED);
-            puts(mes.detail);
-            printf("%s",WHITE);
-        }
     }
-
+    if(mes.resault) {
+        //注册成功
+        puts("注册成功,正在跳转...");
+        sleep(1);
+        strcpy(i_am,name);
+        SigOK(conn_fd);
+        sleep(1);
+    } else {
+        puts("注册失败,用户名已存在!");
+        sleep(2);
+    }
 }
 
+/*
 void SignIn(int conn_fd)
 {
     system("printf \"\ec\"");
-    puts(PURPLE"\t\tsign in\t\t"WHITE);
+    puts(PURPLE"\t\t登陆\t\t"WHITE);
     MES mes;
     char name[20];
-    printf("please input name:");
+    printf("请输入用户名:");
     fgets(name,20,stdin);
     name[strlen(name)] = '\0';
     char pass[20];
-    memcpy(pass,getpass("please input password:"),20);
+    memcpy(pass,getpass("请输入密码:"),20);
     memset(&mes,0,sizeof(mes));
     strcpy(mes.detail,name);
     strcat(mes.detail,";");
@@ -255,20 +291,23 @@ void SignIn(int conn_fd)
     }
 
 }
+*/
 void host(int conn_fd)
 {
         int sel;
         system("printf \"\ec\"");
-        puts(RED"welcome use chat room,you can:"WHITE);
-        puts(PURPLE"1"WHITE".sign in");
+        puts(RED"欢迎来到了聊天室,你可以:"WHITE);
+        puts(PURPLE"1"WHITE".登陆");
         puts("");
-        puts(BLUE"2"WHITE".sign up");
+        puts(BLUE"2"WHITE".注册");
         puts("");
     do {
         sel=Sel();    
     } while(sel<0||sel>2);
     switch (sel) {
     case 1:
+        SignIn(conn_fd);
+        host(conn_fd);
         break;
     case 2:
         SignUp(conn_fd);
