@@ -26,10 +26,15 @@
 #define BLUE        "\e[1;34m"
 #define PURPLE      "\e[1;35m"
 
-#define Sign_In      1
-#define Sign_Up      2
-#define Chat_        3
-#define List_        4
+#define Sign_In             1
+#define Sign_Up             2
+#define Chat_One            3
+#define Chat_Group          4
+#define List_All            5
+#define List_my             6
+#define List_group          7
+#define Add_friend          8
+#define Add_groum           9
 
 typedef struct message
 {
@@ -48,17 +53,22 @@ typedef struct User_list
 }U_L;
 
 void my_err(const char *err_string,int line);
-void List_Add(U_L *head,MES mes);
-int List_View(U_L *head);
-void Search_List(int a,U_L *head);
-int SigOK(int conn_fd);
+void List_Add(MES mes);
+int List_View(void);
+int list_all(void);
+void Search_List(int a);
+void Sign_Ok(void);
 int Sel(void);
-void SignUp(int conn_fd);
-void host(int conn_fd);
-void chat(int conn_fd);
+void SignUp(void);
+void host(void);
+void chat(void);
+void read_all(MES mes);
+void get_one_chat(MES mes);
 
 char to_who[20];
 char i_am[20];
+int ser_fd;
+U_L *head;//用户列表头指针
 
 void my_err(const char *err_string,int line)
 {
@@ -67,14 +77,82 @@ void my_err(const char *err_string,int line)
     exit(1);
 }
 
-void chat(int conn_fd)
+void read_all(MES mes)
+{
+    puts(mes.detail);
+	List_Add(mes);//结果为0为接收完毕
+}
+
+void destory(void) //销毁链表
+{
+    U_L *temp,*temp2;
+    temp=head;
+    temp2=temp->next;
+    while(temp!=NULL) {
+        temp2=temp->next;
+        free(temp);
+        temp=temp2;
+    }
+}
+
+void get_one_chat(MES mes)
+{
+    //接收用户消息
+    //printf("mes.from->%s mes.to->%s i_am->%s to_who->%s\n",mes.from,mes.to,i_am,to_who);
+    if(strcmp(mes.from,to_who) == 0){
+        //如果是当前用户则直接输出
+        printf("%s",mes.detail);
+        printf(YELLOW" <-%s\n"WHITE,mes.to);
+    }else{
+        //不是当前聊天的用户就放进消息盒子
+    }
+}
+
+void my_recv(void)
+{
+	//只用来接收信息的子线程
+	while(1) {
+		MES mes;
+		memset(&mes,0,sizeof(MES));
+		if(recv(ser_fd,&mes,sizeof(MES),0) < 0) {
+			my_err("recv",__LINE__);
+			exit(0);
+		}
+		switch(mes.mode) {
+		case 3:
+			//私聊消息
+            get_one_chat(mes);
+			break;
+		case 4:
+			//群聊消息
+			break;
+		case 5:
+			//附近的人
+			read_all(mes);
+			break;
+		case 6:
+			//我的好友
+			break;
+		case 7:
+			//我的群
+			break;
+		case 8:
+			//加好友
+			break;
+		case 9:
+			//加群
+			break;
+		}
+	}
+}
+void chat(void)
 {
     MES mes;
     puts(YELLOW"-----------------------------------------------");
     puts("-                                             -");
-    puts("-   input your message,press enter to send    -");
-    puts("-   input \"-logout-\" to downlin and quit    -");
-    puts("-   input \"-host-\" return to user list      -");
+    puts("-   输入要发送的消息,按回车键发送             -");
+    puts("-                                             -");
+    puts("-                                             -");
     puts("-                                             -");
     puts("-----------------------------------------------"WHITE);
     while(1) {
@@ -82,24 +160,26 @@ void chat(int conn_fd)
         printf(PURPLE"->%s :"WHITE,to_who);
         fgets(mes.detail,sizeof(mes.detail),stdin);
         mes.detail[strlen(mes.detail)] = '\0';
+        sleep(1);
+        mes.detail[strlen(mes.detail)] = '\0';
         if(strcmp(mes.detail,"-logout-") == 0) {
             exit(0);
-        } else if(strcpy(mes.detail,"-host-") == 0) {
-            SigOK(conn_fd);
+        } else if(strcmp(mes.detail,"-host-") == 0) {
+            Sign_Ok();
             exit(0);
         }
         setbuf(stdin,NULL);
-        mes.mode = Chat_;
+        mes.mode = Chat_One;
         strcpy(mes.from,i_am);
         strcpy(mes.to,to_who);
-        if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+        if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
             my_err("send",__LINE__);
             exit(0);
         }
     }
 }
 
-void List_Add(U_L *head,MES mes)
+void List_Add(MES mes)
 {
     U_L *temp;
     temp = (U_L*)malloc(sizeof(U_L));
@@ -113,54 +193,87 @@ void List_Add(U_L *head,MES mes)
     head->next=temp;
 }
 
-int List_View(U_L *head)
+int List_View(void)
 {
     U_L *temp;
     temp = head->next;
     while(temp != NULL) {
-        printf("%d.%s",temp->num,temp->name);
+        printf("%d.%s\n",temp->num,temp->name);
         temp =temp->next;
     }
     return head->next->num;
 }
-void Search_List(int a,U_L *head)
+
+void Sign_Ok(void)
+{
+    puts(RED"\t\t\t已登陆"WHITE);
+    puts("");
+    puts(BLUE"1.附近的人");
+    puts("2.我的好友");
+    puts("3.我的群");
+    puts("4.消息盒子");
+    puts("5.");
+    puts("6.退出登陆"WHITE);
+    puts("");
+    int sel;
+    do{
+        sel=Sel();
+    }while(sel<1||sel>6);
+    switch(sel) {
+    case 1:
+        list_all();
+        sleep(1);
+        Sign_Ok();
+        break;
+    case 2:
+        break;
+    case 3:
+        break;
+    case 4:
+        break;
+    case 5:
+        break;
+    case 6:
+        break;
+    }
+}
+
+void Search_List(int a)
 {
     U_L *temp = head->next;
     while(temp != NULL) {
         if(a == temp->num) {
             strcpy(to_who,temp->name);
-            return;
+            break;
         }
+        temp=temp->next;
     }
 }
-int SigOK(int conn_fd)
+int list_all(void)
 {
-    U_L *head;
     head = (U_L*)malloc(sizeof(U_L));
     head->next=NULL;
     MES mes;
     memset(&mes,0,sizeof(MES));
-    mes.mode = 4;
-    if(send(conn_fd,&mes,sizeof(MES),0) < 0) {//给服务器发送需要获取用户列表的的信息
+    mes.mode = 5;
+    if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+        //给服务器发送需要获取用户列表的的信息
         my_err("send",__LINE__);
         exit(0);
     }
-    do {
-        memset(&mes,0,sizeof(MES));
-        if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
-            my_err("recv",__LINE__);
-            exit(0);
-        }else { //将用户加入一个链表
-            List_Add(head,mes);
-        }
-    } while(mes.resault);//结果为0为接收完毕
-    int max = List_View(head);
+    sleep(1);
+    int max = List_View();
+    printf("%d\n",max);
     int sel;
     do{
         sel = Sel();
     } while(sel < 1 || sel > max);
-    Search_List(sel,head);//检查所选编号所对应的用户名
-    chat(conn_fd);
+    puts("select OK");
+    Search_List(sel);//检查所选编号所对应的用户名
+    puts(to_who);
+    destory();
+    puts(to_who);
+    chat();
 }
 int Sel(void)
 {
@@ -171,50 +284,56 @@ int Sel(void)
     return a;
 }
 
-void SignIn(int conn_fd)
+void SignIn(void)
 {
     system("printf \"\ec\"");
     puts(PURPLE"\t\t登陆\t\t"WHITE);
     MES mes;
     char name[20];
     printf("请输入用户名:");
-    fgets(name,20,stdin);
+    scanf("%s",name);
+    //fgets(name,20,stdin);
+    //name[strlen(name)]='\0';
     setbuf(stdin,NULL);
     char pass[20];
     memcpy(pass,getpass("请输入密码:"),20);
     memset(&mes,0,sizeof(MES));
     mes.mode=Sign_In;
     strcpy(mes.detail,name);
-    mes.detail[strlen(mes.detail)-1] = ';';
-    mes.detail[strlen(mes.detail)] = '\0';
+    mes.detail[strlen(mes.detail)] = ';';
+    mes.detail[strlen(mes.detail)+1] = '\0';
     strcat(mes.detail,pass);
-    if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+    if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
         my_err("send",__LINE__);
         exit(0);
     }
     memset(&mes,0,sizeof(MES));
-    if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
+    if(recv(ser_fd,&mes,sizeof(MES),0) < 0) {
         my_err("recv",__LINE__);
         exit(0);
     }
     if(mes.resault) {
         puts("登陆成功,正在跳转...");
+		pthread_t thid;
+        pthread_create(&thid,NULL,(void*)my_recv,NULL);
         sleep(1);
         strcpy(i_am,name);
-        SigOK(conn_fd);
+        Sign_Ok();
     } else{
         puts("登陆失败");
         sleep(1);
     }
 }
-void SignUp(int conn_fd)
+void SignUp(void)
 {
     system("printf \"\ec\"");
     puts(PURPLE"\t\t注册\t\t"WHITE);
     MES mes;
     char name[20];
     printf("请输入用户名:");
-    fgets(name,20,stdin);
+    scanf("%s",name);
+    //fgets(name,20,stdin);
+    //name[strlen(name)]='\0';
     setbuf(stdin,NULL);
     while(1) {
         char pass[20];
@@ -226,8 +345,8 @@ void SignUp(int conn_fd)
         if(strcmp(pass,passp) == 0) {
             memset(&mes,0,sizeof(mes));
             strcpy(mes.detail,name);
-            mes.detail[strlen(mes.detail)-1] = ';';
-            mes.detail[strlen(mes.detail)] = '\0';
+            mes.detail[strlen(mes.detail)] = ';';
+            mes.detail[strlen(mes.detail)+1] = '\0';
             strcat(mes.detail,pass);
             break;
         } else {
@@ -235,20 +354,22 @@ void SignUp(int conn_fd)
         }
     }
     mes.mode = Sign_Up;
-    if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+    if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
         my_err("send",__LINE__);
         exit(0);
     }
     memset(&mes,0,sizeof(mes));
-    if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
+    if(recv(ser_fd,&mes,sizeof(MES),0) < 0) {
         my_err("recv",__LINE__);
     }
     if(mes.resault) {
         //注册成功
         puts("注册成功,正在跳转...");
+		pthread_t thid;
+        pthread_create(&thid,NULL,(void*)my_recv,NULL);
         sleep(1);
         strcpy(i_am,name);
-        SigOK(conn_fd);
+        Sign_Ok();
         sleep(1);
     } else {
         puts("注册失败,用户名已存在!");
@@ -256,62 +377,26 @@ void SignUp(int conn_fd)
     }
 }
 
-/*
-void SignIn(int conn_fd)
+void host(void)
 {
+    int sel;
     system("printf \"\ec\"");
-    puts(PURPLE"\t\t登陆\t\t"WHITE);
-    MES mes;
-    char name[20];
-    printf("请输入用户名:");
-    fgets(name,20,stdin);
-    name[strlen(name)] = '\0';
-    char pass[20];
-    memcpy(pass,getpass("请输入密码:"),20);
-    memset(&mes,0,sizeof(mes));
-    strcpy(mes.detail,name);
-    strcat(mes.detail,";");
-    strcat(mes.detail,pass);
-    mes.mode = Sign_In;
-    if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
-        my_err("send",__LINE__);
-        exit(0);
-    }
-    memset(&mes,0,sizeof(MES));
-    if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
-        my_err("recv",__LINE__);
-        exit(0);
-    }
-    if(mes.mode == Sign_In && mes.resault == 1) {
-        strcpy(i_am,name);
-        puts(mes.detail);
-    } else {
-        puts(mes.detail);
-        SignIn(conn_fd);
-    }
-
-}
-*/
-void host(int conn_fd)
-{
-        int sel;
-        system("printf \"\ec\"");
-        puts(RED"欢迎来到了聊天室,你可以:"WHITE);
-        puts(PURPLE"1"WHITE".登陆");
-        puts("");
-        puts(BLUE"2"WHITE".注册");
-        puts("");
+    puts(RED"欢迎来到了聊天室,你可以:"WHITE);
+    puts(PURPLE"1"WHITE".登陆");
+    puts("");
+    puts(BLUE"2"WHITE".注册");
+    puts("");
     do {
         sel=Sel();    
     } while(sel<0||sel>2);
     switch (sel) {
     case 1:
-        SignIn(conn_fd);
-        host(conn_fd);
+        SignIn();
+        host();
         break;
     case 2:
-        SignUp(conn_fd);
-        host(conn_fd);
+        SignUp();
+        host();
         break; 
     }
 
@@ -342,5 +427,6 @@ int main(void)
     }
 
     //主菜单
-    host(conn_fd);
+	ser_fd = conn_fd;
+    host();
 }

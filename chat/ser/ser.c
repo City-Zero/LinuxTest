@@ -25,11 +25,15 @@
 #define USERNAME    0
 #define PASSWORD    1
 
-#define Sign_In      1
-#define Sign_Up      2
-#define Chat_        3
-#define List_        4
-
+#define Sign_In             1 //登陆
+#define Sign_Up             2 //注册
+#define Chat_One            3 //私聊
+#define Chat_Group          4 //群聊
+#define List_All            5 //周围的人
+#define List_My             6 //我的好友
+#define List_group          7 //我的群
+#define Add_friend          8 //添加好友
+#define Add_group           9 //加群
 typedef struct message
 {
     int mode;//模式
@@ -50,8 +54,21 @@ typedef struct User_list
 
 U_L *head;
 
+void chat_one(MES mes);
+void add_list(char *name,int fd);
+void creat_list(void);
+void my_err(const char *err_string,int line);
+int match(int mode,char *ch,int conn_fd);
+int search_fd(char *name);
+void chat_one(MES mes);
+void list_all(int conn_fd);
+void Sign_Ok(int conn_fd);
+void sign_in_up(int conn_fd);
+
+
 void add_list(char *name,int fd)
 {
+    printf("%d\n",fd);
     U_L *temp;
     temp = (U_L*)malloc(sizeof(U_L));
     strcpy(temp->name,name);
@@ -95,8 +112,6 @@ int match(int mode,char *ch,int conn_fd)
         pass[j]=ch[i];
     }
     pass[j]='\0';
-    puts(name);
-    puts(pass);
     //初始化连接句柄
     conn = mysql_init(NULL);
 
@@ -195,6 +210,127 @@ int match(int mode,char *ch,int conn_fd)
     return pan;
 }
 
+int search_fd(char *name)
+{
+    U_L *temp;
+    temp = head->next;
+    while(temp != NULL) {
+        if(strcmp(name,temp->name) == 0) {
+            return temp->num;
+        }
+        temp=temp->next;
+    }
+}
+
+void chat_one(MES mes)
+{
+    int fd;
+    fd = search_fd(mes.to);
+    if(send(fd,&mes,sizeof(MES),0) < 0) {
+        my_err("send",__LINE__);
+        exit(0);
+    } 
+}
+
+void list_all(int conn_fd)
+{
+    U_L *temp;
+    MES mes;
+    temp= head->next;
+    while(temp!=NULL) {
+        memset(&mes,0,sizeof(MES));
+        strcpy(mes.detail,temp->name);
+        puts(temp->name);
+        mes.mode = 5;
+        mes.resault = 1;
+        if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+            my_err("send",__LINE__);
+            exit(0);
+        }
+        temp=temp->next;
+    }
+/*
+    memset(&mes,0,sizeof(MES));
+    mes.mode = 5;
+    mes.resault = 0;
+    if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("send",__LINE__);
+        exit(0);
+    }
+*/
+}
+
+void Sign_Ok(int conn_fd)
+{
+    MES mes;
+    while(1){
+        memset(&mes,0,sizeof(MES));
+        if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
+            my_err("recv",__LINE__);
+            exit(0);
+        }
+        switch(mes.mode){
+        case 3:
+            //私聊
+            chat_one(mes);
+            break;
+            ;
+        case 4:
+            //群聊
+            //chat_group(mes);
+            ;
+        case 5:
+            //所有人
+            printf("%d 请求查看所有在线用户\n",conn_fd);
+            list_all(conn_fd);
+        case 6:
+            //好友
+            ;
+        }
+        
+    }
+}
+/*
+void my_recv(int conn_fd)
+{
+    //专用来接收用户消息
+	while(1) {
+		MES mes;
+		memset(&mes,0,sizeof(MES));
+		if(recv(ser_fd,&mes,sizeof(MES),0) < 0) {
+			my_err("recv",__LINE__);
+			exit(0);
+		}
+		switch(mes.mode) {
+		case 3:
+			//私聊消息
+            get_one_chat(mes);
+			break;
+		case 4:
+			//群聊消息
+			break;
+		case 5:
+			//附近的人
+            printf("%d 请求查看所有在线用户\n",conn_fd);
+            list_all(conn_fd);
+			break;
+		case 6:
+			//我的好友
+			break;
+		case 7:
+			//我的群
+			break;
+		case 8:
+			//加好友
+			break;
+		case 9:
+			//加群
+			break;
+		}
+	}
+}
+*/
+
 void sign_in_up(int conn_fd)
 {
 while(1) {
@@ -205,7 +341,6 @@ while(1) {
         exit(0);
     }
     int res;
-    printf("%d,%s\n",mes.mode,mes.detail);
     res = match(mes.mode,mes.detail,conn_fd);
     char name[20];
     int i;
@@ -213,15 +348,22 @@ while(1) {
         name[i]=mes.detail[i];
     }
     name[i] = '\0';
-    puts("name");
     if(res) {
+        puts("res");
         //跳转到登陆或聊天页面
         add_list(name,conn_fd);
+        printf("%s已登陆\n",name);
+/*
+        pthread_t thid;
+        pthread_create(&thid,NULL,(void*)my_recv,(void*)conn_fd);
+*/
+        Sign_Ok(conn_fd);
     }
 }
 }
 int main()
 {
+    creat_list();
     int sock_fd,conn_fd;
     int optval;
     int flag_recv;
@@ -262,7 +404,7 @@ int main()
         if(conn_fd < 0) {
             my_err("accept",__LINE__);
         }
-        printf("一个新的连接,来自 %s,conn_fd = %d\n",inet_ntoa(cli_addr.sin_addr),conn_fd);
+        printf("一个新的连接,来自 %s\n",inet_ntoa(cli_addr.sin_addr));
 
         pthread_t thid;
         pthread_create(&thid,NULL,(void*)sign_in_up,(void*)conn_fd);
