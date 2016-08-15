@@ -41,6 +41,7 @@ typedef struct message
     char to[20];
     char from[20];
     char detail[255];
+    struct message *next;
 
 }MES;
 
@@ -64,6 +65,9 @@ void chat_one(MES mes);
 void list_all(int conn_fd);
 void Sign_Ok(int conn_fd);
 void sign_in_up(int conn_fd);
+void add_friend(MES mes);
+void list_friend(int conn_fd);
+char *search_name(int conn_fd);
 
 
 void add_list(char *name,int fd)
@@ -78,6 +82,7 @@ void add_list(char *name,int fd)
 }
 void creat_list(void)
 {
+    //将用户名和fd绑定起来
     head = (U_L*)malloc(sizeof(U_L));
     head -> next = NULL;
 }
@@ -89,8 +94,36 @@ void my_err(const char *err_string,int line)
     exit(1);
 }
 
+int create_friend_table(char *name)
+{
+    //注册成功创建好友表
+    char sql[50];
+    sprintf(sql,"CREATE TABLE friend_%s (name VARCHAR(20),mode INT);",name);
+    puts(sql);
+    MYSQL *conn;
+    conn = mysql_init(NULL);
+    if(conn == NULL) { 
+        //如果返回NULL说明初始化失败
+        printf("mysql_init failed!\n");
+        return EXIT_FAILURE;
+    }
+    conn = mysql_real_connect(conn,"localhost","lyt","","chat",0,NULL,0);
+    if (!conn) {
+        printf("Connection failed!\n");
+    }
+    int res;
+    res = mysql_query(conn,sql);//正确返回0
+    if(res) {
+        perror("my_query");
+        mysql_close(conn);
+        exit(0);
+    }
+    mysql_close(conn);
+}
+
 int match(int mode,char *ch,int conn_fd)
 {
+    //匹配用户输入的用户名和密码
     MES mes;
     memset(&mes,0,sizeof(MES));
     char sql[50];
@@ -160,6 +193,7 @@ int match(int mode,char *ch,int conn_fd)
                 exit(0);
             }
             mes.resault = 1;
+            create_friend_table(name);
             if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
                 my_err("send",__LINE__);
                 exit(0);
@@ -210,8 +244,23 @@ int match(int mode,char *ch,int conn_fd)
     return pan;
 }
 
+char *search_name(int conn_fd)
+{
+	//根据fd查询用户名
+    U_L *temp;
+    temp = head->next;
+    while(temp != NULL) {
+        if(temp->num==conn_fd) {
+            return temp->name;
+        }
+        temp=temp->next;
+    }
+    return NULL;    
+}
+
 int search_fd(char *name)
 {
+    //查找用户名对应的FD,找不到返回0
     U_L *temp;
     temp = head->next;
     while(temp != NULL) {
@@ -220,10 +269,12 @@ int search_fd(char *name)
         }
         temp=temp->next;
     }
+    return 0;
 }
 
 void chat_one(MES mes)
 {
+    //私聊转发消息
     int fd;
     fd = search_fd(mes.to);
     if(send(fd,&mes,sizeof(MES),0) < 0) {
@@ -234,6 +285,7 @@ void chat_one(MES mes)
 
 void list_all(int conn_fd)
 {
+    //将所有在线用户发送给客户端
     U_L *temp;
     MES mes;
     temp= head->next;
@@ -249,19 +301,137 @@ void list_all(int conn_fd)
         }
         temp=temp->next;
     }
-/*
-    memset(&mes,0,sizeof(MES));
-    mes.mode = 5;
-    mes.resault = 0;
-    if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+}
+
+void insert_friend(MES mes)
+{
+    //将成功加到的好友添加进入数据表
+    char sql[50];
+    sprintf(sql,"INSERT INTO friend_%s VALUES('%s',0);",mes.to,mes.from);
+    puts(sql);
+    MYSQL *conn;
+    conn = mysql_init(NULL);
+    if(conn == NULL) { 
+        //如果返回NULL说明初始化失败
+        printf("mysql_init failed!\n");
+        return EXIT_FAILURE;
+    }
+    conn = mysql_real_connect(conn,"localhost","lyt","","chat",0,NULL,0);
+    if (!conn) {
+        printf("Connection failed!\n");
+    }
+    int res;
+    res = mysql_query(conn,sql);//正确返回0
+    if(res) {
+        perror("my_query");
+        mysql_close(conn);
+        exit(0);
+    }
+    sprintf(sql,"INSERT INTO friend_%s VALUES('%s',0);",mes.from,mes.to);
+    res = mysql_query(conn,sql);//正确返回0
+    if(res) {
+        perror("my_query");
+        mysql_close(conn);
+        exit(0);
+    } 
+}
+
+void add_friend(MES mes)
+{
+    //添加好友
+    int fd;
+    if(mes.resault == -1) {
+        fd=search_fd(mes.to);
+    } else {
+        fd=search_fd(mes.from);
+    }
+    if(mes.resault==1) {
+        //对方同意添加好友
+        insert_friend(mes);
+    }
+    if(send(fd,&mes,sizeof(MES),0) < 0) {
         my_err("send",__LINE__);
         exit(0);
     }
-*/
+}
+
+void list_friend(int conn_fd)
+{
+    char sql[50];
+    sprintf(sql,"SELECT DISTINCT name FROM friend_%s WHERE mode=0;",search_name(conn_fd));
+    int res;//执行sql语句后的返回标志
+    MYSQL_RES *res_ptr;//指向查询结果的指针
+    MYSQL_FIELD *field;//字段结构指针
+    MYSQL_ROW result_row;//按行返回查询信息
+    int row,column;//查询返回的行数和列数
+    MYSQL *conn;//一个数据库链接
+    int i,j;
+
+    //初始化连接句柄
+    conn = mysql_init(NULL);
+
+    if(conn == NULL) { 
+        //如果返回NULL说明初始化失败
+        printf("mysql_init failed!\n");
+        return EXIT_FAILURE;
+    }
+
+    //进行实际连接
+    //参数　conn连接句柄，host　mysql所在的主机或地址,user用户名,passwd密码,database_name数据库名,后面的都是默认
+    conn = mysql_real_connect(conn,"localhost","lyt","","chat",0,NULL,0);
+    if (conn) {
+        printf("Connection success!\n");
+    } else {
+        printf("Connection failed!\n");
+    }
+    mysql_query(conn,"set names gbk");//防止乱码。设置和数据库的编码一致就不会乱码
+
+    MES mes;
+    res = mysql_query(conn,sql);//正确返回0
+    if(res) {
+        perror("mysql_query");
+        mysql_close(conn);
+        exit(0);
+    } else{
+        //把查询结果给res_ptr
+        res_ptr = mysql_store_result(conn);
+        //如果结果不为空,则输出
+        if(res_ptr) {
+            column = mysql_num_fields(res_ptr);
+            row = mysql_num_rows(res_ptr);
+            //printf("查到%d行,%d列\n",row,column);
+            //输出结果的字段名
+            /*
+            for(i = 0;field = mysql_fetch_field(res_ptr);i++) {
+                printf("%10s",field->name);
+            }
+            puts("");
+            */
+            //按行输出结果
+            for(i = 1;i < row+1;i++){
+                result_row = mysql_fetch_row(res_ptr);
+                for(j = 0;j< column;j++) {
+                    memset(&mes,0,sizeof(MES));
+                    strcpy(mes.detail,result_row[j]);
+                    mes.mode = 6;
+                    if(send(conn_fd,&mes,sizeof(MES),0) < 0) {
+                        my_err("send",__LINE__);
+                        exit(0);
+                    }
+                    
+                    printf("%10s",result_row[j]);
+                }
+                //puts("");
+            }
+        }
+    }
+    //退出前关闭连接
+    mysql_close(conn);
 }
 
 void Sign_Ok(int conn_fd)
 {
+    //登陆成功后开始不断接收消息
     MES mes;
     while(1){
         memset(&mes,0,sizeof(MES));
@@ -283,62 +453,38 @@ void Sign_Ok(int conn_fd)
             //所有人
             printf("%d 请求查看所有在线用户\n",conn_fd);
             list_all(conn_fd);
+            break;
         case 6:
             //好友
-            ;
+            printf("%d 请求查看好友列表\n",conn_fd);
+            list_friend(conn_fd);
+            break;
+        case 8:
+            //添加好友
+            printf("%d 请求添加好友\n",conn_fd);
+            add_friend(mes);
+            break;
         }
         
     }
 }
-/*
-void my_recv(int conn_fd)
-{
-    //专用来接收用户消息
-	while(1) {
-		MES mes;
-		memset(&mes,0,sizeof(MES));
-		if(recv(ser_fd,&mes,sizeof(MES),0) < 0) {
-			my_err("recv",__LINE__);
-			exit(0);
-		}
-		switch(mes.mode) {
-		case 3:
-			//私聊消息
-            get_one_chat(mes);
-			break;
-		case 4:
-			//群聊消息
-			break;
-		case 5:
-			//附近的人
-            printf("%d 请求查看所有在线用户\n",conn_fd);
-            list_all(conn_fd);
-			break;
-		case 6:
-			//我的好友
-			break;
-		case 7:
-			//我的群
-			break;
-		case 8:
-			//加好友
-			break;
-		case 9:
-			//加群
-			break;
-		}
-	}
-}
-*/
 
 void sign_in_up(int conn_fd)
 {
+    //接收登陆用户名密码
 while(1) {
     MES mes;
+    int re;
     memset(&mes,0,sizeof(MES));
-    if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
+    if(re = recv(conn_fd,&mes,sizeof(MES),0) <= 0) {
+        if(re < 0) {
         my_err("recv",__LINE__);
         exit(0);
+        }
+        if(re == 0) {
+            close(conn_fd);
+            exit(0);
+        }
     }
     int res;
     res = match(mes.mode,mes.detail,conn_fd);

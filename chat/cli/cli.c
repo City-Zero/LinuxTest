@@ -43,6 +43,7 @@ typedef struct message
     char to[20];
     char from[20];
     char detail[255];
+    struct message *next;
 }MES;
 
 typedef struct User_list
@@ -55,7 +56,7 @@ typedef struct User_list
 void my_err(const char *err_string,int line);
 void List_Add(MES mes);
 int List_View(void);
-int list_all(void);
+int list_all(int n);
 void Search_List(int a);
 void Sign_Ok(void);
 int Sel(void);
@@ -64,11 +65,15 @@ void host(void);
 void chat(void);
 void read_all(MES mes);
 void get_one_chat(MES mes);
+void add_friend(void);
+void deal_friend(MES mes);
+void add_mhead(MES mes);
 
 char to_who[20];
 char i_am[20];
 int ser_fd;
 U_L *head;//用户列表头指针
+MES *mhead;//消息盒子头指针
 
 void my_err(const char *err_string,int line)
 {
@@ -79,7 +84,7 @@ void my_err(const char *err_string,int line)
 
 void read_all(MES mes)
 {
-    puts(mes.detail);
+    //puts(mes.detail);
 	List_Add(mes);//结果为0为接收完毕
 }
 
@@ -101,8 +106,9 @@ void get_one_chat(MES mes)
     //printf("mes.from->%s mes.to->%s i_am->%s to_who->%s\n",mes.from,mes.to,i_am,to_who);
     if(strcmp(mes.from,to_who) == 0){
         //如果是当前用户则直接输出
-        printf("%s",mes.detail);
-        printf(YELLOW" <-%s\n"WHITE,mes.to);
+        printf("\t\t%s",mes.detail);
+        printf(YELLOW" <-%s"WHITE,mes.from);
+        puts("");
     }else{
         //不是当前聊天的用户就放进消息盒子
     }
@@ -132,12 +138,21 @@ void my_recv(void)
 			break;
 		case 6:
 			//我的好友
+			read_all(mes);
 			break;
 		case 7:
 			//我的群
 			break;
 		case 8:
 			//加好友
+            if(mes.resault==-1) {
+                printf(BLUE"\t%s请求加你为好友,请到消息盒子处理\n"WHITE,mes.from);
+                add_mhead(mes);
+            } else if(mes.resault == 0) {
+                printf(RED"%s拒绝了你的好友请求\n"WHITE,mes.to);
+            } else if(mes.resault == 1) {
+                printf(RED"%s同意了你的好友请求\n"WHITE,mes.to);
+            }
 			break;
 		case 9:
 			//加群
@@ -152,21 +167,15 @@ void chat(void)
     puts("-                                             -");
     puts("-   输入要发送的消息,按回车键发送             -");
     puts("-                                             -");
-    puts("-                                             -");
+    puts("-   输入-quit-返回上一层                      -");
     puts("-                                             -");
     puts("-----------------------------------------------"WHITE);
     while(1) {
         memset(&mes,0,sizeof(MES));
-        printf(PURPLE"->%s :"WHITE,to_who);
         fgets(mes.detail,sizeof(mes.detail),stdin);
-        mes.detail[strlen(mes.detail)] = '\0';
-        sleep(1);
-        mes.detail[strlen(mes.detail)] = '\0';
-        if(strcmp(mes.detail,"-logout-") == 0) {
-            exit(0);
-        } else if(strcmp(mes.detail,"-host-") == 0) {
-            Sign_Ok();
-            exit(0);
+        mes.detail[strlen(mes.detail)-1] = '\0';
+        if(strcmp(mes.detail,"-quit-") == 0) {
+            break;
         }
         setbuf(stdin,NULL);
         mes.mode = Chat_One;
@@ -204,8 +213,109 @@ int List_View(void)
     return head->next->num;
 }
 
+int mess_box(void)
+{
+    MES *temp,*temp2;
+    temp=mhead->next;
+    int i=1;
+    while(temp!=NULL) {
+        printf("%d.",i);
+        switch(temp->mode) {
+        case 3:
+            printf("[私聊]%s\n",temp->from);
+            break;
+        case 4:
+            printf("[群聊]%s\n",temp->to);
+            break;
+        case 8:
+            if(temp->resault==-1) {
+                printf("%s想加你为好友\n",temp->from);
+            }
+            else if(temp->resault == 0) {
+                printf("%s拒绝了你的交友请求",temp->to);
+            }
+            else if(temp->resault==1) {
+                printf("%s同意了你的交友请求",temp->to);
+            }
+            break;
+        case 9:
+            printf("%s群邀请你加入\n",temp->to);
+            break;
+        case 10:
+            break;
+        case 11:
+            break;
+        case 12:
+            break;
+        }
+        temp=temp->next;
+        i++;
+    }
+    int sel;
+    puts("输入数字处理消息.0返回上一层");
+    do{
+        sel=Sel();
+    }while(sel<0||sel>=i);
+    if(sel == 0) return 0;
+    temp=mhead->next;
+    i=1;
+    while(temp!=NULL) {
+        if(sel == i)
+        break;
+        else {
+            i++;
+            temp=temp->next;
+        }
+    }
+    switch(temp->mode) {
+    case 3:
+        printf("[私聊]%s\n",temp->from);
+        break;
+    case 4:
+        printf("[群聊]%s\n",temp->to);
+        break;
+    case 8:
+        if(temp->resault==-1) {
+            printf("%s请求加你为好友,是否同意(y/n)?\n",temp->from);
+            char ch;
+            do{
+                printf("请输入:");
+                ch = getchar();
+            }while(ch!='y'&&ch!='n');
+            MES mes;
+            memcpy(&mes,temp,sizeof(MES));
+            if(ch=='y') {
+                puts("成功添加好友!");
+                mes.resault=1;
+            } else {
+            puts("你以拒绝对方的请求!");
+            mes.resault=0;
+            }
+            if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+                my_err("send",__LINE__);
+                exit(0);
+            }
+        }else if(temp->resault == 0) {
+            printf("%s拒绝了你的交友请求\n",temp->to);
+        }else if(temp->resault == 1) {
+            printf("%s同意了你的交友请求\n",temp->to);
+        }
+        break;
+    case 9:
+        printf("%s群邀请你加入\n",temp->to);
+        break;
+    case 10:
+        break;
+    case 11:
+        break;
+    case 12:
+        break;
+    }
+}
+
 void Sign_Ok(void)
 {
+    system("printf \"\ec\"");
     puts(RED"\t\t\t已登陆"WHITE);
     puts("");
     puts(BLUE"1.附近的人");
@@ -221,15 +331,18 @@ void Sign_Ok(void)
     }while(sel<1||sel>6);
     switch(sel) {
     case 1:
-        list_all();
-        sleep(1);
+        list_all(5);
         Sign_Ok();
         break;
     case 2:
+        list_all(6);
+        Sign_Ok();
         break;
     case 3:
         break;
     case 4:
+        mess_box();
+        Sign_Ok();
         break;
     case 5:
         break;
@@ -249,13 +362,28 @@ void Search_List(int a)
         temp=temp->next;
     }
 }
-int list_all(void)
+void add_friend(void)
+{
+    MES mes;
+    memset(&mes,0,sizeof(MES));
+    mes.mode = 8;
+    mes.resault = -1;//首次发送请求的标志
+    strcpy(mes.from,i_am);
+    strcpy(mes.to,to_who);
+    if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("send",__LINE__);
+        exit(0);
+    }
+    puts("好友请求已发送,请耐心等待对方同意...");
+}
+
+int list_all(int n)
 {
     head = (U_L*)malloc(sizeof(U_L));
     head->next=NULL;
     MES mes;
     memset(&mes,0,sizeof(MES));
-    mes.mode = 5;
+    mes.mode = n;
     if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
         //给服务器发送需要获取用户列表的的信息
         my_err("send",__LINE__);
@@ -263,17 +391,27 @@ int list_all(void)
     }
     sleep(1);
     int max = List_View();
-    printf("%d\n",max);
     int sel;
+    if(n == 5) {
+        puts(RED"请输入序号来添加好友,输入0返回上一层"WHITE);    
+    } else if(n == 6) {
+        puts(RED"请输入序号来选择好友聊天,输入0返回上一层"WHITE);
+    }
     do{
         sel = Sel();
-    } while(sel < 1 || sel > max);
-    puts("select OK");
+    } while(sel < 0 || sel > max);
+    if(sel == 0) return 0;
     Search_List(sel);//检查所选编号所对应的用户名
-    puts(to_who);
     destory();
-    puts(to_who);
-    chat();
+    if(strcmp(to_who,i_am) == 0) {
+        puts(RED"不能选择自己"WHITE);
+        return 0;
+    }
+    if(n == 5) {
+        add_friend();    
+    } else if(n == 6) {
+        chat();
+    }
 }
 int Sel(void)
 {
@@ -402,6 +540,16 @@ void host(void)
 
 }
 
+void add_mhead(MES mes)
+{
+    MES *temp;
+    temp=(MES*)malloc(sizeof(MES));
+    //temp=mes;
+    memcpy(temp,&mes,sizeof(MES));
+    temp->next=mhead->next;
+    mhead->next=temp;
+}
+
 int main(void)
 {
     int conn_fd;
@@ -409,7 +557,9 @@ int main(void)
     char recv_buf[255];
     int ret;
     int serv_port;
-
+    
+    mhead=(MES*)malloc(sizeof(MES));
+    mhead->next=NULL;
     //初始化服务器信息
     memset(&serv_addr,0,sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
