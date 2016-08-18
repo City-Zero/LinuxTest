@@ -37,6 +37,13 @@
 #define Add_group           9
 #define LogOut              10
 #define One_History         11
+#define Gro_History         12
+#define Del_friend          13
+#define Cha_pass            14
+#define Cre_group           15
+#define Del_user            16
+#define Exit_group          17
+#define Group_user          18
 
 typedef struct message
 {
@@ -71,6 +78,12 @@ void get_one_chat(MES mes);
 void add_friend(void);
 void deal_friend(MES mes);
 void add_mhead(MES mes);
+void change_pass(void);
+void creat_group(void);
+int add_group(char *name);
+void tishi_qun(void);
+void ti_ren(void);
+void get_group_chat(MES mes);
 
 char to_who[20];
 char i_am[20];
@@ -78,6 +91,7 @@ int ser_fd;
 U_L *head;//用户列表头指针
 MES *mhead;//消息盒子头指针
 int online=1;
+char qun_name[20];
 
 void my_err(const char *err_string,int line)
 {
@@ -95,6 +109,20 @@ void destory(void) //销毁链表
         temp2=temp->next;
         free(temp);
         temp=temp2;
+    }
+}
+
+void get_group_chat(MES mes)
+{
+    if(strcmp(mes.to,qun_name) == 0){
+        //如果是当前群则直接输出
+        printf("\t\t%s",mes.detail);
+        printf(YELLOW" <-%s"WHITE,mes.from);
+        puts("");
+    }else{
+            printf(PURPLE"群%s发来一条消息,请到消息盒子处理\n"WHITE,mes.to);
+            add_mhead(mes);
+        //不是当前聊天的用户就放进消息盒子
     }
 }
 
@@ -132,6 +160,7 @@ void my_recv(void)
             get_one_chat(mes);
 			break;
 		case 4:
+            get_group_chat(mes);
 			//群聊消息
 			break;
 		case 5:
@@ -147,6 +176,10 @@ void my_recv(void)
 			break;
 		case 7:
 			//我的群
+            if(mes.resault == -1) {
+                puts(GREEN"你没有群,快去创建或者让好友邀请你吧!"WHITE);
+            }
+			List_Add(mes);
 			break;
 		case 8:
 			//加好友
@@ -159,11 +192,24 @@ void my_recv(void)
                 printf(RED"%s同意了你的好友请求\n"WHITE,mes.to);
             } else if(mes.resault == -2) {
                 printf(RED"%s已是你的好友,无需再次添加\n"WHITE,mes.to);
-                sleep(1);
             }
+            sleep(1);
 			break;
 		case 9:
 			//加群
+            if(mes.resault==-1) {
+                printf(BLUE"\t%s邀请你加入群%s,请到消息盒子处理\n"WHITE,mes.from,mes.detail);
+                add_mhead(mes);
+            } else if(mes.resault == 0) {
+                printf(RED"%s拒绝进入群%s\n"WHITE,mes.to,mes.detail);
+            } else if(mes.resault == 1) {
+                printf(RED"%s同意进入群%s\n"WHITE,mes.to,mes.detail);
+            } else if(mes.resault == -2) {
+                printf(RED"%s已是该群成员,无需重复邀请\n"WHITE,mes.to);
+            } else if(mes.resault == -3) {
+                printf(RED"对方不在线,无法接收你的邀请.");
+            }
+            sleep(1);
 			break;
         case 10:
             //退出登陆
@@ -172,21 +218,136 @@ void my_recv(void)
             break;
         case 11:
             //私聊记录
-            printf(BLUE"%s:"WHITE":%s\n",mes.from,mes.detail);
+            printf(BLUE"%s:"WHITE" %s\n",mes.from,mes.detail);
             break;
-		}
+        case 12:
+            //群聊记录
+            printf(BLUE"%s:"WHITE" %s\n",mes.from,mes.detail);
+            break;
+        case 13:
+            //删好友
+            printf(RED"%s已经删除了你...\n"WHITE,mes.from);
+            break;
+        case 18:
+            List_Add(mes);
+            break;
+        }
 	}
 }
+
+void tishi_qun(void)
+{
+    puts(YELLOW"-------------------------------");
+    puts("-                             -");
+    puts("-   输入消息,按回车键发送     -");
+    puts("-   -quit-   :返回上一层      -");
+    puts("-   -history-:聊天记录        -");
+    puts("-   -exit-   :退群            -");
+    puts("-   -l.d-    :查看或删除成员  -");
+    puts("-   -add-    :邀请成员        -");
+    puts("-------------------------------"WHITE);
+}
+
+void exit_qun(void)
+{
+    //退群/解散
+    MES mes;
+    mes.mode = 17;
+    strcpy(mes.from,i_am);
+    strcpy(mes.to,qun_name);
+    if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("send",__LINE__);
+        exit(0);
+    }
+    printf("你已经退出群%s,若你创建了该群则群已被解散.\n",mes.to);
+    strcpy(to_who,"NONE");
+}
+
+void qun_chat(MES *temp)
+{
+    tishi_qun();
+    //将群名保存到全局
+    strcpy(qun_name,to_who);
+
+    MES mes;
+    while(temp!=NULL) {
+        printf("\t\t%s",temp->detail);
+        printf(YELLOW" <-%s"WHITE,temp->from);
+        puts("");
+        temp=temp->sam_next;
+    }
+    while(1) {
+        memset(&mes,0,sizeof(MES));
+        fgets(mes.detail,sizeof(mes.detail),stdin);
+        mes.detail[strlen(mes.detail)-1] = '\0';
+        if(strcmp(mes.detail,"-quit-") == 0) {
+            strcpy(to_who,"NONE");
+            break;
+        } else if(strcmp(mes.detail,"-history-") == 0) {
+            strcpy(mes.from,i_am);
+            strcpy(mes.to,to_who);
+            mes.mode=12;
+            system("printf \"\ec\"");
+            puts(RED"聊天记录"WHITE);
+            if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+                my_err("send",__LINE__);
+                exit(0);
+            }
+            sleep(1);
+            puts("按回车键返回聊天");
+            getchar();
+            system("printf \"\ec\"");
+            tishi_qun();
+            continue;
+        } else if(strcmp(mes.detail,"-exit-") == 0) {
+            exit_qun();
+            sleep(1);
+            break;
+        } else if(strcmp(mes.detail,"-add-") == 0) {
+            system("printf \"\ec\"");
+            add_group(qun_name);
+            tishi_qun();
+            continue;
+        } else if(strcmp(mes.detail,"-l.d-") == 0) {
+            list_all(18);
+            system("printf \"\ec\"");
+            tishi_qun();
+            continue;
+        }
+        mes.mode = 4;
+        strcpy(mes.from,i_am);
+        strcpy(mes.to,qun_name);
+        if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+            my_err("send",__LINE__);
+            exit(0);
+        }
+    }
+}
+
+void ti_ren(void)
+{
+    MES mes;
+    mes.mode=16;
+    strcpy(mes.from,i_am);
+    strcpy(mes.to,to_who);
+    strcpy(mes.detail,qun_name);
+    if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("send",__LINE__);
+        exit(0);
+    }
+    printf(RED"已删除群成员%s"WHITE,mes.to);
+}
+
 void chat(MES *temp)
 {
     MES mes;
-    puts(YELLOW"-----------------------------------------------");
-    puts("-                                             -");
-    puts("-   输入要发送的消息,按回车键发送             -");
-    puts("-                                             -");
-    puts("-   输入-quit-返回上一层                      -");
-    puts("-   输入-history-查看聊天记录                 -");
-    puts("-----------------------------------------------"WHITE);
+    puts(YELLOW"---------------------------------");
+    puts("-                             -");
+    puts("-   输入消息,按回车键发送     -");
+    puts("-   -del-    :删除好友        -");
+    puts("-   -quit-   :返回上一层      -");
+    puts("-   -history-:聊天记录        -");
+    puts("-------------------------------"WHITE);
     while(temp!=NULL) {
         printf("\t\t%s",temp->detail);
         printf(YELLOW" <-%s"WHITE,temp->from);
@@ -214,8 +375,27 @@ void chat(MES *temp)
             puts("按回车键返回聊天");
             getchar();
             system("printf \"\ec\"");
-            puts(RED"\t\t私聊中..."WHITE);
+            puts(YELLOW"---------------------------------");
+            puts("-                             -");
+            puts("-   输入消息,按回车键发送     -");
+            puts("-   -del-    :删除好友        -");
+            puts("-   -quit-   :返回上一层      -");
+            puts("-   -history-:聊天记录        -");
+            puts("-------------------------------"WHITE);
             continue;
+        } else if(strcmp(mes.detail,"-del-") == 0) {
+            mes.mode = 13;
+            strcpy(mes.from,i_am);
+            strcpy(mes.to,to_who);
+            if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+                my_err("send",__LINE__);
+                exit(0);
+            }
+            puts(RED"已删除,按回车键返回..."WHITE);
+            sleep(1);
+            getchar();
+            strcpy(to_who,"NONE");
+            break; 
         }
         setbuf(stdin,NULL);
         mes.mode = Chat_One;
@@ -232,7 +412,6 @@ void List_Add(MES mes)
 {
     U_L *temp;
     if(mes.resault == -1) {
-        puts("没哟好友,从list_add返回了");
         return;
     }
     temp = (U_L*)malloc(sizeof(U_L));
@@ -288,7 +467,13 @@ int mess_box(void)
             }
             break;
         case 9:
-            printf("%s群邀请你加入\n",temp->to);
+            if(temp->resault == -1) {
+                printf("%s邀请你加入群%s\n",temp->from,temp->detail);
+            } else if(temp->resault == 0) {
+                printf("拒绝进群\n");
+            } else if(temp->resault == 1) {
+                printf("同意加群\n");
+            }
             break;
         case 10:
             break;
@@ -316,6 +501,12 @@ int mess_box(void)
             temp=temp->next;
         }
     }
+    //删除被处理的消息列表
+    MES *tt=mhead;
+    while(tt->next!=temp) {
+        tt=tt->next;
+    }
+    tt->next=temp->next;
     switch(temp->mode) {
     case 3:
         strcpy(to_who,temp->from);
@@ -323,6 +514,7 @@ int mess_box(void)
         break;
     case 4:
         printf("[群聊]%s\n",temp->to);
+        qun_chat(temp);
         break;
     case 8:
         if(temp->resault==-1) {
@@ -352,7 +544,32 @@ int mess_box(void)
         }
         break;
     case 9:
-        printf("%s群邀请你加入\n",temp->to);
+        if(temp->resault==-1) {
+            printf("%s邀请你加入群%s,是否同意(y/n)?\n",temp->from,temp->detail);
+            char ch;
+            do{
+                printf("请输入:");
+                ch = getchar();
+            }while(ch!='y'&&ch!='n');
+            MES mes;
+            memcpy(&mes,temp,sizeof(MES));
+            if(ch=='y') {
+                puts("接收入群邀请!");
+                mes.resault=1;
+            } else {
+            puts("拒绝入群邀请!");
+            mes.resault=0;
+            }
+            if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+                my_err("send",__LINE__);
+                exit(0);
+            }
+        }else if(temp->resault == 0) {
+            printf("%s拒绝了你的邀请\n",temp->to);
+        }else if(temp->resault == 1) {
+            printf("%s同意了你的邀请\n",temp->to);
+        }
+        sleep(1);
         break;
     case 10:
         break;
@@ -361,6 +578,8 @@ int mess_box(void)
     case 12:
         break;
     }
+    free(temp);
+
 }
 
 void logout(void)
@@ -375,6 +594,34 @@ void logout(void)
     puts(BLUE"正在像服务器发送下线请求..."WHITE);
 }
 
+void change_pass(void)
+{
+    MES mes;
+    system("printf \"\ec\"");
+    puts(RED"\t注意!你现在在修改密码,请谨慎操作!"WHITE);
+    puts(GREEN"\n\t若你后悔进入此项功能只需两次输入不相同即可退出!"WHITE);
+    char pass[20];
+    char passp[20];
+    memcpy(pass,getpass("请输入密码:"),20);
+    setbuf(stdin,NULL);
+    memcpy(passp,getpass("请再次输入:"),20);
+    setbuf(stdin,NULL);
+    if(strcmp(pass,passp) == 0) {
+        memset(&mes,0,sizeof(mes));
+        strcpy(mes.detail,pass);
+        mes.mode = 14;
+        strcpy(mes.from,i_am);
+        if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+            my_err("send",__LINE__);
+            exit(0);
+        }
+        puts(PURPLE"已修改密码!下次登陆请使用新密码!"WHITE);
+    } else {
+        puts(PURPLE"两次密码不匹配!"WHITE);
+    }
+    sleep(1);
+}
+
 void Sign_Ok(void)
 {
     system("printf \"\ec\"");
@@ -384,13 +631,14 @@ void Sign_Ok(void)
     puts("2.我的好友");
     puts("3.我的群");
     puts("4.消息盒子");
-    puts("5.");
-    puts("6.退出登陆"WHITE);
+    puts("5.修改密码");
+    puts("6.创建群");
+    puts("7.退出登陆"WHITE);
     puts("");
     int sel;
     do{
         sel=Sel();
-    }while(sel<1||sel>6);
+    }while(sel<1||sel>7);
     switch(sel) {
     case 1:
         list_all(5);
@@ -401,14 +649,23 @@ void Sign_Ok(void)
         Sign_Ok();
         break;
     case 3:
+        list_all(7);
+        Sign_Ok();
         break;
     case 4:
         mess_box();
         Sign_Ok();
         break;
     case 5:
+        change_pass();
+        Sign_Ok();
         break;
     case 6:
+        //建群
+        creat_group();
+        Sign_Ok();
+        break;
+    case 7:
         logout();
         sleep(1);
         if(online == 0) {
@@ -450,13 +707,17 @@ void add_friend(void)
     sleep(1);
 }
 
-int list_all(int n)
+int add_group(char *name)
 {
+    puts("邀群友!");
+    char nn[20];
+    strcpy(nn,name);
     head = (U_L*)malloc(sizeof(U_L));
     head->next=NULL;
     MES mes;
     memset(&mes,0,sizeof(MES));
-    mes.mode = n;
+    mes.mode = 6;
+    strcpy(mes.from,i_am);
     if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
         //给服务器发送需要获取用户列表的的信息
         my_err("send",__LINE__);
@@ -466,10 +727,91 @@ int list_all(int n)
     int max = List_View();
     if(max == 0) return 0;
     int sel;
+    puts(RED"请输入序号来邀请,输入0返回上一层"WHITE);
+    do{
+        sel = Sel();
+    } while(sel < 0 || sel > max);
+    if(sel == 0) return 0;
+    Search_List(sel);//检查所选编号所对应的用户名
+    destory();
+    memset(&mes,0,sizeof(MES));
+    mes.mode=9;
+    mes.resault = -1;
+    strcpy(mes.from,i_am);
+    strcpy(mes.to,to_who);
+    strcpy(mes.detail,nn);
+    if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("send",__LINE__);
+        exit(0);
+    }
+    puts(GREEN"邀请已发出,请耐心等候..."WHITE);
+    sleep(1);
+    strcpy(to_who,nn);
+    return 1;
+}
+
+void creat_group(void)
+{
+    MES mes;
+    memset(&mes,0,sizeof(MES));
+    strcpy(mes.from,i_am);
+    mes.mode = 15;
+    printf("请输入群名称:");
+    char name[20];
+    scanf("%s",name);
+    strcpy(mes.to,name);
+    if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+        my_err("send",__LINE__);
+        exit(0);
+    }
+    puts(RED"建群成功!"WHITE);
+    sleep(1);
+    //邀请好友入群
+    while(1){
+    if(!add_group(name))
+        break;
+    }
+}
+
+int list_all(int n)
+{
+    head = (U_L*)malloc(sizeof(U_L));
+    head->next=NULL;
+    MES mes;
+    memset(&mes,0,sizeof(MES));
+    mes.mode = n;
+    strcpy(mes.from,i_am);
+    if(n == 18) {
+        strcpy(mes.to,qun_name);
+    }
+    if(send(ser_fd,&mes,sizeof(MES),0) < 0) {
+        //给服务器发送需要获取用户列表的的信息
+        my_err("send",__LINE__);
+        exit(0);
+    }
+    sleep(1);
+    int max = List_View();
+    if(n == 18) {
+        U_L *hh=head->next;
+        while(hh->next!=NULL) {
+            hh=hh->next;
+        }
+        if(strcmp(hh->name,i_am) != 0) {
+            puts("你没有权限踢人,请按回车返回聊天!");
+            getchar();
+            return 0;
+        }
+    }
+    if(max == 0) return 0;
+    int sel;
     if(n == 5) {
         puts(RED"请输入序号来添加好友,输入0返回上一层"WHITE);    
     } else if(n == 6) {
         puts(RED"请输入序号来选择好友聊天,输入0返回上一层"WHITE);
+    } else if(n == 7) {
+        puts(RED"请输入序号来进行群聊,输入0返回上一层,"WHITE);
+    } else if(n==18) {
+        puts(RED"输入序号删除,输入0返回上一层"WHITE);
     }
     do{
         sel = Sel();
@@ -479,6 +821,7 @@ int list_all(int n)
     destory();
     if(strcmp(to_who,i_am) == 0) {
         puts(RED"不能选择自己"WHITE);
+        puts(qun_name);
         sleep(1);
         return 0;
     }
@@ -486,6 +829,10 @@ int list_all(int n)
         add_friend();    
     } else if(n == 6) {
         chat(NULL);
+    } else if(n == 7) {
+        qun_chat(NULL);
+    } else if(n == 18) {
+        ti_ren();
     }
 }
 int Sel(void)
