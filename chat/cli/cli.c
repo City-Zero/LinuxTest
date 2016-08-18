@@ -987,6 +987,7 @@ void add_mhead(MES mes)
             puts("合并一条消息");
             break;
         }
+        tp=tp->next;
     }
     if(!pan) {
         puts("添加一条消息");
@@ -1018,7 +1019,10 @@ int main(void)
 
     //发送连接请求
     if(connect(conn_fd,(struct sockaddr *)&serv_addr,sizeof(struct sockaddr)) < 0) {
-        my_err("connect",__LINE__);
+        puts(RED"连接服务器失败,可能是:");
+        puts(GREEN"1.你的网络不畅通");
+        puts("2.服务器正在维护"WHITE);
+        exit(0);
     }
 
     //主菜单

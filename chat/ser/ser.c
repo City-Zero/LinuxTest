@@ -1205,11 +1205,18 @@ void Sign_Ok(int conn_fd)
     //登陆成功后开始不断接收消息
     MES mes;
     while(1){
+        int re;
         memset(&mes,0,sizeof(MES));
-        if(recv(conn_fd,&mes,sizeof(MES),0) < 0) {
+        re = recv(conn_fd,&mes,sizeof(MES),0);
+        if(re < 0) {
             my_err("recv",__LINE__);
-            exit(0);
+            exit(0);            
+        } else if(re == 0) {
+            printf("%s异常离线了\n",search_name(conn_fd));
+            logout(conn_fd);
+            pthread_exit(0);
         }
+        printf("re = %d\n",re);
         switch(mes.mode){
         case 3:
             //私聊
@@ -1293,15 +1300,13 @@ while(1) {
     MES mes;
     int re;
     memset(&mes,0,sizeof(MES));
-    if(re = recv(conn_fd,&mes,sizeof(MES),0) <= 0) {
-        if(re < 0) {
+    re = recv(conn_fd,&mes,sizeof(MES),0);
+    if(re < 0) {
         my_err("recv",__LINE__);
         exit(0);
-        }
-        if(re == 0) {
-            close(conn_fd);
-            exit(0);
-        }
+    } else if(re == 0) {
+        close(conn_fd);
+        pthread_exit(0);
     }
     int res;
     res = match(mes.mode,mes.detail,conn_fd);
