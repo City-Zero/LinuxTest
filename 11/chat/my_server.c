@@ -17,7 +17,8 @@
 #include"my_recv.h"
 
 #define SERV_PORT  4040
-#define LISTENQ    5
+#define LISTENQ    255
+
 #define  INVALID_USERNAME  'n'
 #define  VALID_USERNAME    'y'
 
@@ -30,7 +31,6 @@ struct userinfo
 };
 struct userinfo users[]=
 {
-    {"linux","linux"},
     {"lyt","lyt"},
     {"zxw","zxw"},
     {" "," "}
@@ -52,6 +52,50 @@ int find_name(const char *name)
         }
     }
     return -1;
+}
+
+void log_in(int conn_fd)
+{
+	int ret;
+    while(1)
+    {
+        if((ret = recv(conn_fd,recv_buf,sizeof(recv_buf),0))<0)
+        {
+            perror("recv");
+            exit(1);
+        }
+        recv_buf[ret-1] = '\0';
+
+        if(flag_recv == USERNAME)
+        {
+            name_num = find_name(recv_buf);
+            switch(name_num)
+            {
+            case -1:
+                send_data(conn_fd,"n\n");
+                break;
+            case -2:
+                exit(1);
+                break;
+            default:
+                send_data(conn_fd,"y\n");
+                flag_recv = PASSWORD;
+                break; 
+            }                    
+        }
+        else if(flag_recv == PASSWORD)
+        {
+            if(strcmp(users[name_num].password,recv_buf) == 0)
+            {
+                send_data(conn_fd,"y\n");
+                send_data(conn_fd,"Welcome login my tcp server\n");
+                printf("%s login\n",users[name_num].username);
+                break;
+            }
+            else
+            send_data(conn_fd,"n\n");
+        } 
+    }
 }
 
 void send_data(int conn_fd,const char *string)
@@ -112,55 +156,8 @@ int main()
 
         printf("accept a new client , ip :%s\n",inet_ntoa(cli_addr.sin_addr));//打印客户端地址
 
-        if((pid =vfork())==0)
-        {
-            while(1)
-            {
-                if((ret = recv(conn_fd,recv_buf,sizeof(recv_buf),0))<0)//接收参数1指定套接字描述符的数据并保存到参数2,返回接收到的数据量
-                {
-                    perror("recv");
-                    exit(1);
-                }
-                recv_buf[ret-1] = '\0';//结束符
-
-                if(flag_recv == USERNAME)
-                {
-                    name_num = find_name(recv_buf);
-                    switch(name_num)
-                    {
-                        case -1:
-                            send_data(conn_fd,"n\n");//自定义发送数据函数
-                            break;
-                        case -2:
-                            exit(1);
-                            break;
-                        default:
-                            send_data(conn_fd,"y\n");
-                            flag_recv = PASSWORD;
-                            break;
-                    }
-                }
-                else if(flag_recv == PASSWORD)
-                {
-                    if(strcmp(users[name_num].password,recv_buf) == 0)
-                    {
-                        send_data(conn_fd,"y\n");
-                        send_data(conn_fd,"Welcome login my tcp server\n");
-                        printf("%s login\n",users[name_num].username);
-                        break;
-                    }
-                    else
-                        send_data(conn_fd,"n\n");
-                } 
-            }
-            close(sock_fd);
-            close(conn_fd);
-            exit(0);
-        }
-        else
-        {
-            close(conn_fd);
-        }
+		pthread_t thid;
+		pthread_create(&thid,NULL,(void*)log_in(),&conn_fd);
     }
     return 0;
 }

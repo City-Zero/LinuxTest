@@ -14,6 +14,7 @@
 #include<arpa/inet.h>
 #include<errno.h>
 #include<stdlib.h>
+#include<pthread.h>
 
 #define HostIp      "127.0.0.1"
 #define HostPort    4040
@@ -44,6 +45,7 @@
 #define Del_user            16
 #define Exit_group          17
 #define Group_user          18
+#define Sys_mes             19
 
 typedef struct message
 {
@@ -150,10 +152,15 @@ void my_recv(void)
 	while(1) {
 		MES mes;
 		memset(&mes,0,sizeof(MES));
-		if(recv(ser_fd,&mes,sizeof(MES),0) < 0) {
+        int re;
+		re = recv(ser_fd,&mes,sizeof(MES),0);
+        if(re == 0) {
+            puts("服务器开始维护,你已断开连接!");
+            exit(0);
+        } else if(re<0){
 			my_err("recv",__LINE__);
 			exit(0);
-		}
+        }
 		switch(mes.mode) {
 		case 3:
 			//私聊消息
@@ -231,12 +238,16 @@ void my_recv(void)
         case 18:
             List_Add(mes);
             break;
+        case 19:
+            printf(RED"系统消息:%s\n"WHITE,mes.detail);
+            break;
         }
-	}
+    }
 }
 
 void tishi_qun(void)
 {
+    system("printf \"\ec\"");
     puts(YELLOW"-------------------------------");
     puts("-                             -");
     puts("-   输入消息,按回车键发送     -");
@@ -267,7 +278,11 @@ void qun_chat(MES *temp)
 {
     tishi_qun();
     //将群名保存到全局
-    strcpy(qun_name,to_who);
+    if(temp != NULL) {
+        strcpy(qun_name,temp->to);
+    } else {
+        strcpy(qun_name,to_who);
+    }
 
     MES mes;
     while(temp!=NULL) {
@@ -281,6 +296,7 @@ void qun_chat(MES *temp)
         fgets(mes.detail,sizeof(mes.detail),stdin);
         mes.detail[strlen(mes.detail)-1] = '\0';
         if(strcmp(mes.detail,"-quit-") == 0) {
+            strcpy(qun_name,"NONE");
             strcpy(to_who,"NONE");
             break;
         } else if(strcmp(mes.detail,"-history-") == 0) {
@@ -427,10 +443,8 @@ void List_Add(MES mes)
 
 int List_View(void)
 {
-    puts("进入list_view");
     U_L *temp;
     if(head->next == NULL) {
-        puts("0个好友!!");
         return 0;
     }
     temp = head->next;
@@ -625,7 +639,8 @@ void change_pass(void)
 void Sign_Ok(void)
 {
     system("printf \"\ec\"");
-    puts(RED"\t\t\t已登陆"WHITE);
+    printf("\t%s",i_am);
+    puts(RED"\t\t已登陆"WHITE);
     puts("");
     puts(BLUE"1.附近的人");
     puts("2.我的好友");
@@ -974,7 +989,7 @@ void add_mhead(MES mes)
     
     tp=mhead->next;
     while(tp != NULL) {
-        if(tp->mode == temp->mode&&strcmp(tp->from,temp->from) == 0) {
+        if(((temp->mode == 4)&&(temp->mode == tp->mode)&&(strcmp(tp->to,temp->to) == 0))||(temp->mode != 4&&tp->mode == temp->mode&&strcmp(tp->from,temp->from) == 0)) {
             tp->num++;
             MES *t1,*t2;
             t1=tp;
@@ -984,13 +999,11 @@ void add_mhead(MES mes)
             temp->sam_next=t1->sam_next;
             t1->sam_next=temp;
             pan = 1;
-            puts("合并一条消息");
             break;
         }
         tp=tp->next;
     }
     if(!pan) {
-        puts("添加一条消息");
         temp->next=mhead->next;
         mhead->next=temp;
     }
