@@ -4,10 +4,10 @@ online chat
 
 依赖环境及使用说明
 -
-#ubuntu系
+>ubuntu系
 安装`libmysqlclient-dev`
 
-#fedora系
+>fedora系
 安装`mysql-devel`
 
 - 安装mysql及上面的包
