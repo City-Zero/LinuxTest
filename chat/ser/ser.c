@@ -18,6 +18,7 @@
 #include<mysql/mysql.h>
 #include<string.h>
 #include<pthread.h>
+#include "conf.h"
 
 #define SERV_PORT   4040
 #define LISTENQ     5
@@ -133,7 +134,7 @@ int create_friend_table(char *name)
         printf("mysql_init failed!\n");
         return EXIT_FAILURE;
     }
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -182,7 +183,7 @@ int match(int mode,char *ch,int conn_fd)
 
     //进行实际连接
     //参数　conn连接句柄，host　mysql所在的主机或地址,user用户名,passwd密码,database_name数据库名,后面的都是默认
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -325,7 +326,7 @@ void add_group_message(MES mes)
         printf("mysql_init failed!\n");
         return;// EXIT_FAILURE;
     }
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -365,7 +366,7 @@ void add_one_message(MES mes)
         printf("mysql_init failed!\n");
         return;// EXIT_FAILURE;
     }
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -399,7 +400,7 @@ void chat_group(MES mes)
         return;// EXIT_FAILURE;
     }
 
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -497,7 +498,7 @@ void insert_friend(MES mes)
         printf("mysql_init failed!\n");
         return;// EXIT_FAILURE;
     }
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -550,7 +551,7 @@ int compare_friend(MES mes)
 
     //进行实际连接
     //参数　conn连接句柄，host　mysql所在的主机或地址,user用户名,passwd密码,database_name数据库名,后面的都是默认
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -598,7 +599,7 @@ int compare_group(MES mes)
         return EXIT_FAILURE;
     }
 
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -649,7 +650,7 @@ void creat_group(MES mes)
         return;// EXIT_FAILURE;
     }
 
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -682,7 +683,7 @@ void insert_group(MES mes)
         printf("mysql_init failed!\n");
         return;// EXIT_FAILURE;
     }
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -800,7 +801,7 @@ void list_friend(int conn_fd,int mode,char *qunming)
         return;// EXIT_FAILURE;
     }
 
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (conn) {
         //printf("Connection success!\n");
     } else {
@@ -899,7 +900,7 @@ void group_message(MES mes)
         return;// EXIT_FAILURE;
     }
 
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (conn) {
         //printf("Connection success!\n");
     } else {
@@ -967,7 +968,7 @@ void one_message(MES mes)
         return;// EXIT_FAILURE;
     }
 
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (conn) {
         //printf("Connection success!\n");
     } else {
@@ -1035,7 +1036,7 @@ void del_frined(MES mes)
         printf("mysql_init failed!\n");
         return;// EXIT_FAILURE;
     }
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -1074,7 +1075,7 @@ void cha_pass(MES mes)
         printf("mysql_init failed!\n");
         return;// EXIT_FAILURE;
     }
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -1100,7 +1101,7 @@ void del_group_user(MES mes)
         printf("mysql_init failed!\n");
         return;// EXIT_FAILURE;
     }
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
@@ -1142,7 +1143,7 @@ void exit_group(MES mes)
         return;// EXIT_FAILURE;
     }
 
-    conn = mysql_real_connect(conn,"localhost","root","","chat",0,NULL,0);
+    conn = mysql_real_connect(conn,HOSTNAME,USER,PASS,DATABASE,0,NULL,0);
     if (!conn) {
         printf("Connection failed!\n");
     }
